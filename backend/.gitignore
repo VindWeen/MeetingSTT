@@ -1,0 +1,29 @@
+# =============================================================
+#  BACKEND .gitignore  –  Express / Node.js  →  Render
+# =============================================================
+
+# ─── Environment / Secrets ───────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Node ────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# ─── File uploads (Multer) ───────────────────────────────────
+# Render dùng ephemeral disk, không cần push file upload lên git
+uploads/*
+!uploads/.gitkeep
+
+# ─── OS / Editor ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.sw?

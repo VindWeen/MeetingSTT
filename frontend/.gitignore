@@ -1,0 +1,37 @@
+# =============================================================
+#  FRONTEND .gitignore  –  Vite / React  →  GitHub Pages
+# =============================================================
+
+# ─── Environment / Secrets ───────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Build output ────────────────────────────────────────────
+# Có thể push /dist lên nhánh gh-pages riêng bằng gh-pages CLI
+# Không push vào nhánh main
+dist/
+dist-ssr/
+
+# ─── Node ────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# ─── Vite local config ───────────────────────────────────────
+*.local
+
+# ─── OS / Editor ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
