@@ -10,11 +10,11 @@ export const api = {
   async ping() {
     try {
       const res = await fetch(`${this.getBaseUrl()}/ping`);
-      if (!res.ok) return { online: false };
+      if (!res.ok) return { online: false, hasDatabase: false };
       const data = await res.json();
-      return { online: true, hasKey: data.hasKey };
+      return { online: true, hasKey: data.hasKey, hasDatabase: !!data.hasDatabase };
     } catch (e) {
-      return { online: false };
+      return { online: false, hasDatabase: false };
     }
   },
 
@@ -157,5 +157,52 @@ export const api = {
     } catch (err) {
       onError(err);
     }
+  },
+
+  // 6. Database meetings CRUD operations (Supabase proxy)
+  async getDbMeetings() {
+    const res = await fetch(`${this.getBaseUrl()}/api/meetings`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to fetch meetings');
+    }
+    return await res.json();
+  },
+
+  async createDbMeeting(meeting) {
+    const res = await fetch(`${this.getBaseUrl()}/api/meetings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(meeting)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to create meeting');
+    }
+    return await res.json();
+  },
+
+  async updateDbMeeting(id, updates) {
+    const res = await fetch(`${this.getBaseUrl()}/api/meetings/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to update meeting');
+    }
+    return await res.json();
+  },
+
+  async deleteDbMeeting(id) {
+    const res = await fetch(`${this.getBaseUrl()}/api/meetings/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to delete meeting');
+    }
+    return await res.json();
   }
 };

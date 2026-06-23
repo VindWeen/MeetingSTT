@@ -26,21 +26,45 @@ export default function App() {
   // Connection states
   const [serverStatus, setServerStatus] = useState({ checking: true, online: false });
 
-  // 1. Initial Load
+  // 1. Initial Load & Connection Check
   useEffect(() => {
-    const list = storage.getMeetings();
-    setMeetings(list);
-    if (list.length > 0) {
-      setActiveMeetingId(list[0].id);
-    } else {
-      const defaultMeeting = storage.createMeeting('Cuộc họp chào mừng 🚀');
-      const updatedList = storage.getMeetings();
-      setMeetings(updatedList);
-      setActiveMeetingId(defaultMeeting.id);
-    }
+    const initializeApp = async () => {
+      // 1. Verify connection and DB presence
+      setServerStatus(s => ({ ...s, checking: true }));
+      const status = await api.ping();
+      setServerStatus({ checking: false, online: status.online });
+      storage.setDatabaseActive(status.online && status.hasDatabase);
 
-    checkConnection();
-    const interval = setInterval(checkConnection, 30000);
+      // 2. Fetch and load meetings list
+      const list = await storage.getMeetings();
+      setMeetings(list);
+      if (list.length > 0) {
+        setActiveMeetingId(list[0].id);
+      } else {
+        const defaultMeeting = await storage.createMeeting('Cuộc họp chào mừng 🚀');
+        const updatedList = await storage.getMeetings();
+        setMeetings(updatedList);
+        setActiveMeetingId(defaultMeeting.id);
+      }
+    };
+
+    initializeApp();
+
+    const interval = setInterval(async () => {
+      const status = await api.ping();
+      setServerStatus({ checking: false, online: status.online });
+      
+      const wasDbActive = storage.isDatabaseActive();
+      const isDbActive = status.online && status.hasDatabase;
+      storage.setDatabaseActive(isDbActive);
+
+      // Reload meetings if the database active status flipped
+      if (wasDbActive !== isDbActive) {
+        const list = await storage.getMeetings();
+        setMeetings(list);
+      }
+    }, 30000);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -48,20 +72,30 @@ export default function App() {
     setServerStatus(s => ({ ...s, checking: true }));
     const status = await api.ping();
     setServerStatus({ checking: false, online: status.online });
+    
+    const wasDbActive = storage.isDatabaseActive();
+    const isDbActive = status.online && status.hasDatabase;
+    storage.setDatabaseActive(isDbActive);
+
+    if (wasDbActive !== isDbActive) {
+      const list = await storage.getMeetings();
+      setMeetings(list);
+    }
   };
 
   const activeMeeting = meetings.find(m => m.id === activeMeetingId);
 
   // 2. Action Handlers
-  const handleCreateMeeting = () => {
-    const newMeet = storage.createMeeting();
-    setMeetings(storage.getMeetings());
+  const handleCreateMeeting = async () => {
+    const newMeet = await storage.createMeeting();
+    const updatedList = await storage.getMeetings();
+    setMeetings(updatedList);
     setActiveMeetingId(newMeet.id);
   };
 
-  const handleDeleteMeeting = (id) => {
+  const handleDeleteMeeting = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa cuộc họp này? Dữ liệu lịch sử sẽ mất hoàn toàn.')) {
-      const remaining = storage.deleteMeeting(id);
+      const remaining = await storage.deleteMeeting(id);
       setMeetings(remaining);
       if (activeMeetingId === id) {
         setActiveMeetingId(remaining.length > 0 ? remaining[0].id : null);
@@ -69,15 +103,22 @@ export default function App() {
     }
   };
 
-  const handleRenameMeeting = (id, newTitle) => {
-    storage.updateMeeting(id, { title: newTitle });
-    setMeetings(storage.getMeetings());
+  const handleRenameMeeting = async (id, newTitle) => {
+    await storage.updateMeeting(id, { title: newTitle });
+    const updatedList = await storage.getMeetings();
+    setMeetings(updatedList);
   };
 
   const handleUpdateActiveMeeting = (updates) => {
     if (!activeMeetingId) return;
+    
+    // Update local React state immediately for responsive typing & UI rendering
+    setMeetings(prev =>
+      prev.map(m => m.id === activeMeetingId ? { ...m, ...updates } : m)
+    );
+
+    // Save asynchronously (localStorage immediately, DB debounced)
     storage.updateMeeting(activeMeetingId, updates);
-    setMeetings(storage.getMeetings());
   };
 
   const handleStartRecord = () => {
