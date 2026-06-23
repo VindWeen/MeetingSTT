@@ -5,17 +5,24 @@ import AIChatWorkspace from './components/AIChatWorkspace';
 import FinalOutput from './components/FinalOutput';
 import RecordingModal from './components/RecordingModal';
 import SettingsModal from './components/SettingsModal';
+import MobileNav from './components/MobileNav';
+import MobileDrawer from './components/MobileDrawer';
 import { storage } from './services/storage';
 import { api } from './services/api';
+import { Menu } from 'lucide-react';
 
 export default function App() {
   const [meetings, setMeetings] = useState([]);
   const [activeMeetingId, setActiveMeetingId] = useState(null);
-  
+
   // Modals & Panels toggle
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecordingOpen, setIsRecordingOpen] = useState(false);
-  
+
+  // Mobile state
+  const [mobileTab, setMobileTab] = useState('audio'); // 'meetings' | 'audio' | 'chat' | 'output'
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   // Connection states
   const [serverStatus, setServerStatus] = useState({ checking: true, online: false });
 
@@ -26,18 +33,13 @@ export default function App() {
     if (list.length > 0) {
       setActiveMeetingId(list[0].id);
     } else {
-      // Auto-create a default meeting if list is empty
       const defaultMeeting = storage.createMeeting('Cuộc họp chào mừng 🚀');
       const updatedList = storage.getMeetings();
       setMeetings(updatedList);
       setActiveMeetingId(defaultMeeting.id);
     }
 
-    // Ping check server
     checkConnection();
-
-    // Auto-ping every 30 seconds to prevent Render spin-down if active,
-    // and keep check status updated
     const interval = setInterval(checkConnection, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -45,10 +47,7 @@ export default function App() {
   const checkConnection = async () => {
     setServerStatus(s => ({ ...s, checking: true }));
     const status = await api.ping();
-    setServerStatus({
-      checking: false,
-      online: status.online
-    });
+    setServerStatus({ checking: false, online: status.online });
   };
 
   const activeMeeting = meetings.find(m => m.id === activeMeetingId);
@@ -78,23 +77,15 @@ export default function App() {
   const handleUpdateActiveMeeting = (updates) => {
     if (!activeMeetingId) return;
     storage.updateMeeting(activeMeetingId, updates);
-    // Reload state from localstorage
     setMeetings(storage.getMeetings());
-  };
-
-  const handleOpenSettings = () => {
-    setIsSettingsOpen(true);
   };
 
   const handleStartRecord = () => {
     setIsRecordingOpen(true);
   };
 
-  // Called when Recording finishes
   const handleSaveRecording = (audioFile) => {
     setIsRecordingOpen(false);
-    
-    // Proactively call AudioWorkspace's file processing handler
     if (window.processRecordedAudio) {
       window.processRecordedAudio(audioFile);
     } else {
@@ -102,72 +93,164 @@ export default function App() {
     }
   };
 
+  // When user picks a meeting from mobile drawer → switch to audio tab
+  const handleMobileSelectMeeting = (id) => {
+    setActiveMeetingId(id);
+    setMobileTab('audio');
+  };
+
   return (
     <div className="h-screen w-screen bg-surface-50 flex overflow-hidden select-none">
-      
-      {/* 1. Sidebar - Left Panel */}
-      <Sidebar
+
+      {/* ── DESKTOP: Sidebar ── */}
+      <div className="hidden md:flex">
+        <Sidebar
+          meetings={meetings}
+          activeId={activeMeetingId}
+          onSelect={setActiveMeetingId}
+          onCreate={handleCreateMeeting}
+          onDelete={handleDeleteMeeting}
+          onRename={handleRenameMeeting}
+          serverStatus={serverStatus}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      </div>
+
+      {/* ── MOBILE: Drawer ── */}
+      <MobileDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
         meetings={meetings}
         activeId={activeMeetingId}
-        onSelect={setActiveMeetingId}
+        onSelect={handleMobileSelectMeeting}
         onCreate={handleCreateMeeting}
         onDelete={handleDeleteMeeting}
         onRename={handleRenameMeeting}
         serverStatus={serverStatus}
-        onOpenSettings={handleOpenSettings}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      {/* 2. Main Workspace - Right Area */}
-      <div className="flex-1 flex overflow-hidden h-full">
-        {activeMeeting ? (
-          <>
-            {/* Left Workspace Column: Audio inputs & raw text */}
-            <div className="w-1/2 h-full flex flex-col">
-              <AudioWorkspace
-                meeting={activeMeeting}
-                onUpdateMeeting={handleUpdateActiveMeeting}
-                onStartRecord={handleStartRecord}
-                serverOnline={serverStatus.online}
-              />
-            </div>
+      {/* ── Main content ── */}
+      <div className="flex-1 flex overflow-hidden h-full flex-col">
 
-            {/* Right Workspace Column: AI chat (top) & Final formatted output (bottom) */}
-            <div className="w-1/2 h-full flex flex-col">
-              {/* Top 55% - AI Chat */}
-              <div className="h-[55%] w-full">
-                <AIChatWorkspace
+        {/* ── MOBILE: Top bar ── */}
+        <div className="flex md:hidden items-center justify-between px-4 py-3 bg-white border-b border-surface-200 flex-shrink-0">
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="p-2 rounded-lg text-surface-500 hover:bg-surface-100 active:scale-90 transition-all"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-brand-600 flex items-center justify-center">
+              <span className="text-white text-[9px] font-bold">AI</span>
+            </div>
+            <span className="text-sm font-bold text-surface-800 truncate max-w-[160px]">
+              {activeMeeting?.title || 'AI Meeting'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+              serverStatus.checking ? 'bg-amber-400 animate-pulse' :
+              serverStatus.online   ? 'bg-emerald-500' : 'bg-red-400'
+            }`} />
+          </div>
+        </div>
+
+        {/* ── DESKTOP layout: side-by-side columns ── */}
+        <div className="hidden md:flex flex-1 overflow-hidden h-full">
+          {activeMeeting ? (
+            <>
+              <div className="w-1/2 h-full flex flex-col">
+                <AudioWorkspace
                   meeting={activeMeeting}
                   onUpdateMeeting={handleUpdateActiveMeeting}
+                  onStartRecord={handleStartRecord}
                   serverOnline={serverStatus.online}
                 />
               </div>
-
-              {/* Bottom 45% - Final rendered output */}
-              <div className="h-[45%] w-full">
-                <FinalOutput meeting={activeMeeting} />
+              <div className="w-1/2 h-full flex flex-col">
+                <div className="h-[55%] w-full">
+                  <AIChatWorkspace
+                    meeting={activeMeeting}
+                    onUpdateMeeting={handleUpdateActiveMeeting}
+                    serverOnline={serverStatus.online}
+                  />
+                </div>
+                <div className="h-[45%] w-full">
+                  <FinalOutput meeting={activeMeeting} />
+                </div>
               </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-surface-400">
+              <p className="text-sm font-medium">Vui lòng chọn hoặc tạo cuộc họp mới để bắt đầu làm việc.</p>
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-surface-400">
-            <p className="text-sm font-medium">Vui lòng chọn hoặc tạo cuộc họp mới để bắt đầu làm việc.</p>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* ── MOBILE layout: single tab panel ── */}
+        <div className="flex md:hidden flex-1 overflow-hidden pb-16">
+          {activeMeeting ? (
+            <>
+              {mobileTab === 'audio' && (
+                <div className="w-full h-full flex flex-col">
+                  <AudioWorkspace
+                    meeting={activeMeeting}
+                    onUpdateMeeting={handleUpdateActiveMeeting}
+                    onStartRecord={handleStartRecord}
+                    serverOnline={serverStatus.online}
+                  />
+                </div>
+              )}
+              {mobileTab === 'chat' && (
+                <div className="w-full h-full flex flex-col">
+                  <AIChatWorkspace
+                    meeting={activeMeeting}
+                    onUpdateMeeting={handleUpdateActiveMeeting}
+                    serverOnline={serverStatus.online}
+                  />
+                </div>
+              )}
+              {mobileTab === 'output' && (
+                <div className="w-full h-full flex flex-col">
+                  <FinalOutput meeting={activeMeeting} />
+                </div>
+              )}
+              {mobileTab === 'meetings' && (
+                <div className="w-full h-full flex flex-col items-center justify-center text-surface-400 gap-3">
+                  <p className="text-sm">Mở menu để chọn cuộc họp</p>
+                  <button
+                    onClick={() => setIsDrawerOpen(true)}
+                    className="px-5 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold active:scale-95 transition-all"
+                  >
+                    Mở danh sách
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-surface-400">
+              <p className="text-sm font-medium">Vui lòng tạo cuộc họp mới để bắt đầu.</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Modals & Overlays */}
+      {/* ── MOBILE: Bottom Nav ── */}
+      <MobileNav activeTab={mobileTab} onTabChange={setMobileTab} />
+
+      {/* Modals */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onUrlChange={checkConnection}
       />
-
       <RecordingModal
         isOpen={isRecordingOpen}
         onClose={() => setIsRecordingOpen(false)}
         onSave={handleSaveRecording}
       />
-
     </div>
   );
 }

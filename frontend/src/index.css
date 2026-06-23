@@ -174,3 +174,18 @@
   text-transform: uppercase;
   color: #9ca3b0;
 }
+
+/* ─── Mobile Drawer Slide-in ─────────────────────────────────── */
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ─── iPhone safe area bottom padding ───────────────────────── */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
