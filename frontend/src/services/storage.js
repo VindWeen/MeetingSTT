@@ -5,7 +5,7 @@ const BACKEND_URL_KEY = 'ai_meeting_editor_backend_url';
 export const storage = {
   // 1. Backend URL Management
   getBackendUrl() {
-    return localStorage.getItem(BACKEND_URL_KEY) || 'http://localhost:5000';
+    return localStorage.getItem(BACKEND_URL_KEY) || 'https://meetingstt.onrender.com';
   },
 
   setBackendUrl(url) {
