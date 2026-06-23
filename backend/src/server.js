@@ -6,10 +6,32 @@ import fs from 'fs';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { OpenAI } from 'openai';
+import { createClient } from '@supabase/supabase-js';
 import { getAudioDuration, splitAudio, cleanupFiles } from './utils/audio.js';
 
 // Load environment variables
 dotenv.config();
+
+// Initialize Supabase client if credentials are provided
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+const isSupabaseConfigured = supabaseUrl && 
+  supabaseUrl !== 'your_supabase_url_here' && 
+  supabaseKey && 
+  supabaseKey !== 'your_supabase_publishable_key_here';
+
+let supabase = null;
+if (isSupabaseConfigured) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('==================================================');
+  console.log('💚 Supabase client initialized successfully.');
+  console.log('==================================================');
+} else {
+  console.log('==================================================');
+  console.log('⚠️ Supabase credentials missing/placeholder. Hybrid fallback active.');
+  console.log('==================================================');
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,14 +40,15 @@ const PORT = process.env.PORT || 5000;
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:4173',
-  process.env.FRONTEND_URL  // e.g. https://<username>.github.io
-].filter(Boolean);
+  process.env.FRONTEND_URL  // e.g. https://vindween.github.io
+].filter(Boolean).map(o => o.toLowerCase());  // normalize to lowercase
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (curl, Postman, mobile)
+    // Allow requests with no origin (curl, Postman, Render healthcheck)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some(o => origin.startsWith(o))) {
+    const originLower = origin.toLowerCase();
+    if (allowedOrigins.some(o => originLower.startsWith(o))) {
       return callback(null, true);
     }
     callback(new Error(`CORS: origin ${origin} not allowed`));
@@ -95,8 +118,122 @@ app.get('/ping', (req, res) => {
   res.json({
     status: 'ok',
     message: 'AI Meeting Editor Backend is awake',
-    hasKey: !!process.env.OPENAI_API_KEY
+    hasKey: !!process.env.OPENAI_API_KEY,
+    hasDatabase: !!supabase
   });
+});
+
+// 1b. Meetings CRUD Database Endpoints (Supabase)
+app.get('/api/meetings', async (req, res) => {
+  if (!supabase) {
+    return res.status(400).json({ error: 'Supabase database not configured on backend' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('meetings')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const meetings = data.map(m => ({
+      id: m.id,
+      title: m.title,
+      createdAt: m.created_at,
+      rawText: m.raw_text || '',
+      chatHistory: m.chat_history || [],
+      finalMarkdown: m.final_markdown || '',
+      audioDuration: parseFloat(m.audio_duration) || 0
+    }));
+
+    res.json(meetings);
+  } catch (err) {
+    console.error('Error fetching meetings:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/meetings', async (req, res) => {
+  if (!supabase) {
+    return res.status(400).json({ error: 'Supabase database not configured on backend' });
+  }
+  const { id, title, rawText, chatHistory, finalMarkdown, audioDuration, createdAt } = req.body;
+  if (!id || !title) {
+    return res.status(400).json({ error: 'id and title are required fields' });
+  }
+  try {
+    const newDbMeeting = {
+      id,
+      title,
+      raw_text: rawText || '',
+      chat_history: chatHistory || [],
+      final_markdown: finalMarkdown || '',
+      audio_duration: audioDuration || 0,
+      created_at: createdAt || new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('meetings')
+      .insert([newDbMeeting])
+      .select();
+
+    if (error) throw error;
+
+    res.json({ success: true, meeting: data[0] });
+  } catch (err) {
+    console.error('Error creating meeting:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/meetings/:id', async (req, res) => {
+  if (!supabase) {
+    return res.status(400).json({ error: 'Supabase database not configured on backend' });
+  }
+  const { id } = req.params;
+  const updates = req.body;
+  try {
+    const dbUpdates = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.rawText !== undefined) dbUpdates.raw_text = updates.rawText;
+    if (updates.chatHistory !== undefined) dbUpdates.chat_history = updates.chatHistory;
+    if (updates.finalMarkdown !== undefined) dbUpdates.final_markdown = updates.finalMarkdown;
+    if (updates.audioDuration !== undefined) dbUpdates.audio_duration = updates.audioDuration;
+    if (updates.createdAt !== undefined) dbUpdates.created_at = updates.createdAt;
+
+    const { data, error } = await supabase
+      .from('meetings')
+      .update(dbUpdates)
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+
+    res.json({ success: true, updated: data[0] });
+  } catch (err) {
+    console.error(`Error updating meeting ${id}:`, err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/meetings/:id', async (req, res) => {
+  if (!supabase) {
+    return res.status(400).json({ error: 'Supabase database not configured on backend' });
+  }
+  const { id } = req.params;
+  try {
+    const { error } = await supabase
+      .from('meetings')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(`Error deleting meeting ${id}:`, err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 2. Prepare audio endpoint (accepts upload, measures duration, splits if large)
