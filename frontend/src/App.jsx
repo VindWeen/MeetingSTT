@@ -20,7 +20,7 @@ export default function App() {
   const [isRecordingOpen, setIsRecordingOpen] = useState(false);
 
   // Mobile state
-  const [mobileTab, setMobileTab] = useState('audio'); // 'meetings' | 'audio' | 'chat' | 'output'
+  const [mobileTab, setMobileTab] = useState('audio'); // 'audio' | 'chat' | 'output'
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Connection states
@@ -256,17 +256,6 @@ export default function App() {
               {mobileTab === 'output' && (
                 <div className="w-full h-full flex flex-col">
                   <FinalOutput meeting={activeMeeting} />
-                </div>
-              )}
-              {mobileTab === 'meetings' && (
-                <div className="w-full h-full flex flex-col items-center justify-center text-surface-400 gap-3">
-                  <p className="text-sm">Mở menu để chọn cuộc họp</p>
-                  <button
-                    onClick={() => setIsDrawerOpen(true)}
-                    className="px-5 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold active:scale-95 transition-all"
-                  >
-                    Mở danh sách
-                  </button>
                 </div>
               )}
             </>

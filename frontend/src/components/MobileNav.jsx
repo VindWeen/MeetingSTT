@@ -1,8 +1,6 @@
-import React from 'react';
-import { MessageSquare, Mic, Sparkles, FileText } from 'lucide-react';
+import { Mic, Sparkles, FileText } from 'lucide-react';
 
 const tabs = [
-  { id: 'meetings', icon: MessageSquare, label: 'Cuộc họp' },
   { id: 'audio',    icon: Mic,           label: 'Ghi âm'   },
   { id: 'chat',     icon: Sparkles,      label: 'AI Chat'  },
   { id: 'output',   icon: FileText,      label: 'Kết quả'  },
